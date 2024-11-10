@@ -24,12 +24,13 @@ export function MeterUploader() {
   const [meterReading, setMeterReading] = useState<string | null>(null);
   const [isManualInputMode, setIsManualInputMode] = useState(false);
   const [isReadingConfirmed, setIsReadingConfirmed] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const { toast } = useToast();
 
   const getCurrentStep = () => {
     if (!selectedImage) return 1;
-    if (!meterReading) return 1;
-    if (meterReading && !isUploading) return 2;
+    if (!meterReading && !isManualInputMode) return 1;
+    if ((meterReading || isManualInputMode) && !isUploading) return 2;
     return 3;
   };
 
@@ -39,6 +40,7 @@ export function MeterUploader() {
     setMeterReading(null);
     setIsManualInputMode(false);
     setIsReadingConfirmed(false);
+    setHasError(false);
   };
 
   const resetForm = () => {
@@ -50,6 +52,35 @@ export function MeterUploader() {
     setMeterReading(null);
     setIsManualInputMode(false);
     setIsReadingConfirmed(false);
+    setHasError(false);
+  };
+
+  const handleManualEntry = () => {
+    setIsManualInputMode(true);
+    setMeterReading("");
+    setHasError(false);
+  };
+
+  const handleError = (error: unknown) => {
+    let errorMessage = "Failed to process meter reading";
+
+    if (error instanceof Error) {
+      if (error.message.includes("500")) {
+        errorMessage = "The server is temporarily unavailable. Please try again later or enter the reading manually.";
+      } else if (error.message.includes("Network")) {
+        errorMessage = "Network connection error. Please check your internet connection and try again.";
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
+    toast({
+      title: "Error",
+      description: errorMessage,
+      variant: "destructive",
+    });
+    setMeterReading(null);
+    setHasError(true);
   };
 
   const uploadImage = async () => {
@@ -64,6 +95,7 @@ export function MeterUploader() {
 
     setIsUploading(true);
     setUploadProgress(0);
+    setHasError(false);
 
     const formData = new FormData();
     formData.append("file", selectedImage);
@@ -79,6 +111,9 @@ export function MeterUploader() {
         "https://hook.eu2.make.com/gilno9hpihs228cv0d8uaoq7bqzussiu",
         {
           method: "POST",
+          headers: {
+            Accept: "application/json",
+          },
           body: formData,
         }
       );
@@ -87,21 +122,21 @@ export function MeterUploader() {
       setUploadProgress(100);
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+        throw new Error(`Server error: ${response.status}`);
       }
 
-      const contentType = response.headers.get("content-type");
       let data: WebhookResponse;
+      const contentType = response.headers.get("content-type");
 
-      if (contentType?.includes("application/json")) {
-        data = await response.json();
-      } else {
-        const text = await response.text();
-        try {
+      try {
+        if (contentType?.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
           data = JSON.parse(text);
-        } catch {
-          throw new Error("Invalid response format from server");
         }
+      } catch (parseError) {
+        throw new Error("Invalid response format from server");
       }
 
       if (data.error) {
@@ -118,18 +153,7 @@ export function MeterUploader() {
 
       setMeterReading(data.Reading.toString());
     } catch (error) {
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Failed to process meter reading. Please try again.";
-      
-      console.error("Upload error:", { error, message: errorMessage });
-      
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      setMeterReading(null);
+      handleError(error);
     } finally {
       setIsUploading(false);
       clearInterval(progressInterval);
@@ -150,31 +174,60 @@ export function MeterUploader() {
         <ProcessSteps currentStep={getCurrentStep()} />
 
         <div className="space-y-4">
-          {imagePreview ? (
-            <div className="relative w-full h-64">
-              <Image
-                src={imagePreview}
-                alt="Selected meter"
-                fill
-                className="object-contain rounded-lg"
-              />
-            </div>
-          ) : (
-            <Dropzone onFileUpload={handleFileUpload} />
+          {!isManualInputMode && (
+            <>
+              {imagePreview ? (
+                <div className="relative w-full h-64">
+                  <Image
+                    src={imagePreview}
+                    alt="Selected meter"
+                    fill
+                    className="object-contain rounded-lg"
+                  />
+                </div>
+              ) : (
+                <Dropzone onFileUpload={handleFileUpload} />
+              )}
+
+              {isUploading && <UploadProgress progress={uploadProgress} />}
+            </>
           )}
 
-          {isUploading && <UploadProgress progress={uploadProgress} />}
-
-          {meterReading && (
+          {(meterReading || isManualInputMode) && (
             <MeterResult 
-              reading={meterReading} 
+              reading={meterReading || ""}
               onManualInputStart={() => setIsManualInputMode(true)}
               onReadingConfirmed={() => setIsReadingConfirmed(true)}
+              isManualMode={isManualInputMode}
+              onReset={resetForm}
             />
           )}
 
-          <div className="flex gap-2">
-            {imagePreview && (
+          {hasError && (
+            <div className="space-y-4">
+              <p className="text-sm text-center text-muted-foreground">
+                Would you like to try again with another photo or enter the reading manually?
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={resetForm}
+                  className="flex-1"
+                >
+                  Try Another Photo
+                </Button>
+                <Button
+                  onClick={handleManualEntry}
+                  className="flex-1"
+                >
+                  Enter Manually
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!hasError && !isManualInputMode && !isReadingConfirmed && imagePreview && (
+            <div className="flex gap-2">
               <Button
                 variant="outline"
                 onClick={resetForm}
@@ -182,8 +235,6 @@ export function MeterUploader() {
               >
                 Clear
               </Button>
-            )}
-            {!isManualInputMode && !isReadingConfirmed && (
               <Button
                 onClick={uploadImage}
                 disabled={!selectedImage || isUploading}
@@ -191,8 +242,8 @@ export function MeterUploader() {
               >
                 {isUploading ? "Processing..." : "Process Image"}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </Card>
