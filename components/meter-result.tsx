@@ -1,11 +1,14 @@
 "use client";
 
-import { CheckCircle, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
+import { submitMeterReading } from "@/lib/api";
+import { MeterDisplay } from "./meter-display";
+import { VerificationButtons } from "./verification-buttons";
+import { ManualInput } from "./manual-input";
+import { ErrorActions } from "./error-actions";
 
 interface MeterResultProps {
   reading: string;
@@ -13,6 +16,8 @@ interface MeterResultProps {
   onReadingConfirmed?: () => void;
   isManualMode?: boolean;
   onReset?: () => void;
+  onSubmitStart?: () => void;
+  onSubmitComplete?: () => void;
 }
 
 export function MeterResult({ 
@@ -20,7 +25,9 @@ export function MeterResult({
   onManualInputStart, 
   onReadingConfirmed, 
   isManualMode = false,
-  onReset 
+  onReset,
+  onSubmitStart,
+  onSubmitComplete
 }: MeterResultProps) {
   const [isVerified, setIsVerified] = useState<boolean | null>(isManualMode ? false : null);
   const [manualReading, setManualReading] = useState("");
@@ -45,33 +52,16 @@ export function MeterResult({
     const finalReading = isVerified ? reading : manualReading;
     setIsSubmitting(true);
     setSubmitError(false);
+    onSubmitStart?.();
 
     try {
-      const response = await fetch(
-        "https://hook.eu2.make.com/t078lb2an5ny3du2gg694mppox2lrbnd",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            reading: finalReading,
-            isAutomaticReading: isVerified,
-            timestamp: new Date().toISOString(),
-          }),
-        }
-      );
-
-      if (response.status === 200) {
-        setIsFinalSubmitted(true);
-        toast({
-          title: "Success",
-          description: "Reading submitted successfully",
-        });
-        return;
-      }
-
-      throw new Error("Failed to submit reading");
+      await submitMeterReading(finalReading, isVerified || false);
+      setIsFinalSubmitted(true);
+      onSubmitComplete?.();
+      toast({
+        title: "Success",
+        description: "Reading submitted successfully",
+      });
     } catch (error) {
       setSubmitError(true);
       toast({
@@ -95,38 +85,10 @@ export function MeterResult({
       <div className="space-y-4">
         {!isManualMode && (
           <>
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-5 w-5 text-primary" />
-              <div>
-                <p className="text-sm font-medium">Detected Reading</p>
-                <p className="text-2xl font-bold">{reading}</p>
-              </div>
-            </div>
+            <MeterDisplay reading={reading} />
 
             {isVerified === null && (
-              <div className="space-y-2">
-                <p className="text-sm text-center">Is this reading correct?</p>
-                <div className="flex gap-2 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-32"
-                    onClick={() => handleVerificationResponse(true)}
-                  >
-                    <ThumbsUp className="w-4 h-4 mr-2" />
-                    Yes
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-32"
-                    onClick={() => handleVerificationResponse(false)}
-                  >
-                    <ThumbsDown className="w-4 h-4 mr-2" />
-                    No
-                  </Button>
-                </div>
-              </div>
+              <VerificationButtons onVerify={handleVerificationResponse} />
             )}
 
             {isVerified === true && !isFinalSubmitted && !submitError && (
@@ -144,29 +106,13 @@ export function MeterResult({
                 Reading marked as incorrect ✗
               </div>
             )}
-            <div className="space-y-2">
-              <p className="text-sm text-center">
-                {isManualMode ? "Enter your meter reading:" : "Please enter the correct reading:"}
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="Enter reading"
-                  value={manualReading}
-                  onChange={(e) => setManualReading(e.target.value)}
-                  className="text-center"
-                />
-                <Button 
-                  size="sm"
-                  onClick={submitReading}
-                  disabled={!manualReading.trim() || isSubmitting}
-                >
-                  {isSubmitting ? "Submitting..." : "Submit"}
-                </Button>
-              </div>
-            </div>
+            <ManualInput
+              value={manualReading}
+              onChange={setManualReading}
+              onSubmit={submitReading}
+              isSubmitting={isSubmitting}
+              isManualMode={isManualMode}
+            />
           </div>
         )}
 
@@ -183,32 +129,24 @@ export function MeterResult({
         )}
 
         {submitError && (
-          <div className="space-y-4">
-            <div className="text-sm text-center text-red-600 font-medium">
-              Failed to submit reading
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={submitReading}
-                disabled={isSubmitting}
-                className="flex-1"
-              >
-                Try Again
-              </Button>
-              <Button
-                onClick={handleStartOver}
-                className="flex-1"
-              >
-                Start Over
-              </Button>
-            </div>
-          </div>
+          <ErrorActions
+            onRetry={submitReading}
+            onStartOver={onReset || (() => {})}
+            isSubmitting={isSubmitting}
+          />
         )}
 
         {isFinalSubmitted && (
-          <div className="text-sm text-center text-green-600 font-medium">
-            Reading submitted successfully ✓
+          <div className="space-y-4">
+            <div className="text-sm text-center text-green-600 font-medium">
+              Reading submitted successfully ✓
+            </div>
+            <Button
+              onClick={handleStartOver}
+              className="w-full"
+            >
+              Start Over
+            </Button>
           </div>
         )}
       </div>

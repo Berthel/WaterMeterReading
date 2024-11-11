@@ -9,12 +9,7 @@ import { Dropzone } from "./dropzone";
 import { MeterResult } from "./meter-result";
 import { UploadProgress } from "./upload-progress";
 import { ProcessSteps } from "./process-steps";
-
-interface WebhookResponse {
-  Reading?: string | number;
-  error?: string;
-  message?: string;
-}
+import { uploadMeterImage } from "@/lib/api";
 
 export function MeterUploader() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -25,13 +20,15 @@ export function MeterUploader() {
   const [isManualInputMode, setIsManualInputMode] = useState(false);
   const [isReadingConfirmed, setIsReadingConfirmed] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const getCurrentStep = () => {
     if (!selectedImage) return 1;
     if (!meterReading && !isManualInputMode) return 1;
+    if (isSubmitting) return 3;
     if ((meterReading || isManualInputMode) && !isUploading) return 2;
-    return 3;
+    return 2;
   };
 
   const handleFileUpload = (file: File) => {
@@ -41,6 +38,7 @@ export function MeterUploader() {
     setIsManualInputMode(false);
     setIsReadingConfirmed(false);
     setHasError(false);
+    setIsSubmitting(false);
   };
 
   const resetForm = () => {
@@ -53,6 +51,7 @@ export function MeterUploader() {
     setIsManualInputMode(false);
     setIsReadingConfirmed(false);
     setHasError(false);
+    setIsSubmitting(false);
   };
 
   const handleManualEntry = () => {
@@ -107,56 +106,13 @@ export function MeterUploader() {
     }, 100);
 
     try {
-      const response = await fetch(
-        "https://hook.eu2.make.com/gilno9hpihs228cv0d8uaoq7bqzussiu",
-        {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-          },
-          body: formData,
-        }
-      );
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      let data: WebhookResponse;
-      const contentType = response.headers.get("content-type");
-
-      try {
-        if (contentType?.includes("application/json")) {
-          data = await response.json();
-        } else {
-          const text = await response.text();
-          data = JSON.parse(text);
-        }
-      } catch (parseError) {
-        throw new Error("Invalid response format from server");
-      }
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      if (data.message && !data.Reading) {
-        throw new Error(data.message);
-      }
-
-      if (!data.Reading) {
-        throw new Error("No meter reading detected in the image");
-      }
-
-      setMeterReading(data.Reading.toString());
+      const reading = await uploadMeterImage(formData);
+      setMeterReading(reading);
     } catch (error) {
       handleError(error);
     } finally {
-      setIsUploading(false);
       clearInterval(progressInterval);
+      setIsUploading(false);
       setUploadProgress(0);
     }
   };
@@ -200,6 +156,8 @@ export function MeterUploader() {
               onReadingConfirmed={() => setIsReadingConfirmed(true)}
               isManualMode={isManualInputMode}
               onReset={resetForm}
+              onSubmitStart={() => setIsSubmitting(true)}
+              onSubmitComplete={() => setIsSubmitting(false)}
             />
           )}
 
