@@ -48,7 +48,7 @@ export function MeterResult({
 
     try {
       const response = await fetch(
-        "https://hook.eu2.make.com/t078lb2an5ny3du2gg694mppox2lrbnd",
+        process.env.NEXT_PUBLIC_WEBHOOK_URL_SUBMIT || "",
         {
           method: "POST",
           headers: {

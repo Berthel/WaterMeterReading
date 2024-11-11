@@ -112,7 +112,7 @@ export function MeterUploader() {
 
     try {
       const response = await fetch(
-        "https://hook.eu2.make.com/gilno9hpihs228cv0d8uaoq7bqzussiu",
+        process.env.NEXT_PUBLIC_WEBHOOK_URL_UPLOAD || "",
         {
           method: "POST",
           headers: {
