@@ -207,8 +207,16 @@ export function MeterResult({
         )}
 
         {isFinalSubmitted && (
-          <div className="text-sm text-center text-green-600 font-medium">
-            Reading submitted successfully ✓
+          <div className="space-y-4">
+            <div className="text-sm text-center text-green-600 font-medium">
+              Reading submitted successfully ✓
+            </div>
+            <Button
+              onClick={handleStartOver}
+              className="w-full"
+            >
+              Upload New Photo
+            </Button>
           </div>
         )}
       </div>

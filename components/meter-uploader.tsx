@@ -30,8 +30,12 @@ export function MeterUploader() {
   const getCurrentStep = () => {
     if (!selectedImage) return 1;
     if (!meterReading && !isManualInputMode) return 1;
-    if ((meterReading || isManualInputMode) && !isUploading) return 2;
+    if ((meterReading || isManualInputMode) && !isReadingConfirmed) return 2;
     return 3;
+  };
+
+  const isReadyToSubmit = () => {
+    return isReadingConfirmed || (isManualInputMode && meterReading !== null);
   };
 
   const handleFileUpload = (file: File) => {
@@ -165,13 +169,13 @@ export function MeterUploader() {
     <Card className="p-6 max-w-2xl mx-auto">
       <div className="space-y-6">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">Water Meter Reading Upload</h2>
-          <p className="text-muted-foreground">
-            Upload a clear image of your water meter for automatic reading
+          <h1 className="text-4xl font-bold mb-4">Water Meter Reading</h1>
+          <p className="text-xl text-muted-foreground">
+            Take a clear photo of your water meter
           </p>
         </div>
 
-        <ProcessSteps currentStep={getCurrentStep()} />
+        <ProcessSteps currentStep={getCurrentStep()} isReadyToSubmit={isReadyToSubmit()} />
 
         <div className="space-y-4">
           {!isManualInputMode && (
