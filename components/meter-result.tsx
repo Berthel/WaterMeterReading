@@ -48,7 +48,7 @@ export function MeterResult({
 
     try {
       const response = await fetch(
-        "https://hook.eu2.make.com/t078lb2an5ny3du2gg694mppox2lrbnd",
+        process.env.NEXT_PUBLIC_WEBHOOK_URL_SUBMIT || "",
         {
           method: "POST",
           headers: {
@@ -207,8 +207,16 @@ export function MeterResult({
         )}
 
         {isFinalSubmitted && (
-          <div className="text-sm text-center text-green-600 font-medium">
-            Reading submitted successfully ✓
+          <div className="space-y-4">
+            <div className="text-sm text-center text-green-600 font-medium">
+              Reading submitted successfully ✓
+            </div>
+            <Button
+              onClick={handleStartOver}
+              className="w-full"
+            >
+              Upload New Photo
+            </Button>
           </div>
         )}
       </div>
